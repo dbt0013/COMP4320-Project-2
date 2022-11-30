@@ -25,6 +25,7 @@ using namespace std;
 #define MAXLINE 4096
 #define BUFFSIZE 8192
 #define PORT 9877
+#define WINDOW_SIZE = 32
 
 int checkSum(char pkt[], int pktLength) {
     int checksum = 0;
@@ -135,6 +136,8 @@ int main(int argc, char *argv[]) {
         fread(pFileContent, sizeof(char), fileLength, pf);
         fclose(pf);
 
+        bzero(&receiveBuffer, BUFFSIZE);
+
         //send file length
         string filelength = intToString(fileLength);
         strcpy(sendBuffer, filelength.c_str());
@@ -144,63 +147,130 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
         
+        
         //packet[0-5]: checksum
         //packet[6-9]: sequence
         //packet[10-511]: data
         //if it is the last packet, the length will < 512
         cout << "sending..." << endl;
-        for (int i = 0; i < (fileLength + (DATA_SIZE - 1)) / DATA_SIZE; i++) {
-            bzero(&sendBuffer, BUFFSIZE);
-            bool lastPacket = false;
-            if (i > 99999) {
-                perror("error: file is too large");
-                exit(EXIT_FAILURE);
+
+        int lastAck = -1;
+        while (lastAck < (fileLength + (DATA_SIZE - 1)) / DATA_SIZE) {
+
+            // initialize current window
+            int window_start = lastAck;
+            int window_end = window_start + WINDOW_SIZE;
+            bool containsLast = false;
+            if (window_end > fileLength / DATA_SIZE) {
+                window_end = fileLength / DATA_SIZE;
+                containsLast = true;
             }
-            //determine whether it is the last package
-            int pktlen = PACKET_SIZE;
-            if (i == fileLength / DATA_SIZE) {
-                pktlen = fileLength % DATA_SIZE + HEADER_SIZE;
-                lastPacket = true;
-            }
-            char pkt[pktlen];
-            memset(&pkt, 0, sizeof(pkt));
-            //put sequence header
-            pkt[6] = i / 1000 % 10 + '0';
-            pkt[7] = i / 100 % 10 + '0';
-            pkt[8] = i / 10 % 10 + '0';
-            pkt[9] = i % 10 + '0';
-            //put data
-            for(int j = HEADER_SIZE; j < pktlen; j++) {
-                pkt[j] = pFileContent[(i * DATA_SIZE) + (j - HEADER_SIZE)];
-            }
-            int csum = checkSum(pkt, pktlen);
-            //put checksum header
-            pkt[0] = csum / 100000 % 10 + '0';
-            pkt[1] = csum / 10000 % 10 + '0';
-            pkt[2] = csum / 1000 % 10 + '0';
-            pkt[3] = csum / 100 % 10 + '0';
-            pkt[4] = csum / 10 % 10 + '0';
-            pkt[5] = csum % 10 + '0';
-            //put packet in buff
-            for(int j = 0; j < pktlen; j++) {
-                sendBuffer[j] = pkt[j];
-            }
-            //send
-            cout << "Sent packet [" << i << "] size: " << sizeof(pkt) << " bytes to client" << endl;
-            n = sendto(sockfd, (char *)sendBuffer, pktlen, 0, (struct sockaddr *)&clientaddr, clientLength);
-            if (n < 0) {
-                perror("error: Sending packet");
-                exit(EXIT_FAILURE);
-            }
-            //send NULL after sending all packet
-            if(lastPacket) {
-                cout << "Full file sent to client" << endl;
+
+            // send window
+            for (int j = window_start; j < window_end; j++) {
+                // zero out buffer
                 bzero(&sendBuffer, BUFFSIZE);
-                n = sendto(sockfd, (char *)sendBuffer, 0, 0, (struct sockaddr *)&clientaddr, clientLength);
-                if (n < 0) {
-                    perror("error: Sending last packet");
-                    exit(1);
+                bool lastPacket = false;
+                if (j > 99999) {
+                    perror("error: file is too large");
+                    exit(EXIT_FAILURE);
                 }
+
+                //determine whether it is the last packet
+                int pktlen = PACKET_SIZE;
+                if (j == fileLength / DATA_SIZE) {
+                    pktlen = fileLength % DATA_SIZE + HEADER_SIZE;
+                    lastPacket = true;
+                }
+
+                char pkt[pktlen];
+                memset(&pkt, 0, sizeof(pkt));
+
+                //put sequence header
+                pkt[6] = j / 1000 % 10 + '0';
+                pkt[7] = j / 100 % 10 + '0';
+                pkt[8] = j / 10 % 10 + '0';
+                pkt[9] = j % 10 + '0';
+
+                //put data
+                for(int k = HEADER_SIZE; k < pktlen; k++) {
+                pkt[k] = pFileContent[(j * DATA_SIZE) + (k - HEADER_SIZE)];
+                }
+
+                
+                //put checksum header
+                int csum = checkSum(pkt, pktlen);
+                pkt[0] = csum / 100000 % 10 + '0';
+                pkt[1] = csum / 10000 % 10 + '0';
+                pkt[2] = csum / 1000 % 10 + '0';
+                pkt[3] = csum / 100 % 10 + '0';
+                pkt[4] = csum / 10 % 10 + '0';
+                pkt[5] = csum % 10 + '0';
+
+                //put packet in buff
+                for(int k = 0; k < pktlen; k++) {
+                    sendBuffer[k] = pkt[k];
+                }
+
+                //send
+                cout << "Sent packet [" << j << "] size: " << sizeof(pkt) << " bytes to client" << endl;
+                n = sendto(sockfd, (char *)sendBuffer, pktlen, 0, (struct sockaddr *)&clientaddr, clientLength);
+                if (n < 0) {
+                    perror("error: Sending packet");
+                    exit(EXIT_FAILURE);
+                }
+
+                //send NULL after sending all packet
+                if(lastPacket) {
+                    cout << "Full file sent to client" << endl;
+                    bzero(&sendBuffer, BUFFSIZE);
+                    n = sendto(sockfd, (char *)sendBuffer, 0, 0, (struct sockaddr *)&clientaddr, clientLength);
+                    if (n < 0) {
+                        perror("error: Sending last packet");
+                        exit(1);
+                    }
+                }
+
+                // check for ACK/NAK
+                int n = recvfrom(sockfd, (char *)receiveBuffer, MAXLINE,
+                    MSG_WAITALL, ( struct sockaddr *) &clientaddr, (socklen_t *)&clientLength);
+
+                if (n < 0) {
+                    perror("error receiving from client");
+                    exit(EXIT_FAILURE);
+                }
+
+                // print obtained data
+                cout << "Message from client" << endl;
+                receiveBuffer[n] = '\0';
+                printf("Client : %s\n", receiveBuffer);
+
+                for int (j = 0; j < n; j+2) {
+                    if (receiveBuffer[j] == "ACK") {
+                        int seqNum = receiveBuffer[j+1];
+                        // advance window
+                        if (seqNum > lastAck) {
+                            lastAck = seqNum;
+                        }
+                    }
+
+                    else if (receiveBuffer[j+1] == "NAK") {
+                        int seqNum = receiveBuffer[j+1];
+                        lastAck = seqNum;
+
+                        // stop timer
+                        break;
+                    }
+
+                    else {
+                        perror("ACK/NACK receiving error");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+
+                bzero(&receiveBuffer, BUFFSIZE);
+
+                // timeout??
             }
         }
         cout << endl;
