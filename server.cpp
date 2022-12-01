@@ -232,6 +232,9 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
+                // Wait additional 15ms after last packet in window sent
+                sleep(0.015);
+
                 // check for ACK/NAK
                 int n = recvfrom(sockfd, (char *)receiveBuffer, MAXLINE,
                     MSG_WAITALL, ( struct sockaddr *) &clientaddr, (socklen_t *)&clientLength);
