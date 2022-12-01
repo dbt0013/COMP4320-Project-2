@@ -16,6 +16,7 @@ Fall 2022
 #include <netdb.h>
 #include <sstream>
 #include <vector>
+#include <errno.h>
 
 using namespace std;
 
@@ -25,7 +26,7 @@ using namespace std;
 #define MAXLINE 4096
 #define BUFFSIZE 8192
 #define PORT 9877
-#define WINDOW_SIZE = 32
+#define WINDOW_SIZE 32
 
 int checkSum(char pkt[], int pktLength) {
     int checksum = 0;
@@ -154,8 +155,8 @@ int main(int argc, char *argv[]) {
         //if it is the last packet, the length will < 512
         cout << "sending..." << endl;
 
-        int lastAck = -1;
-        while (lastAck < (fileLength + (DATA_SIZE - 1)) / DATA_SIZE) {
+        int lastAck = 0;
+        while (lastAck != (fileLength + (DATA_SIZE - 1)) / DATA_SIZE) {
 
             // initialize current window
             int window_start = lastAck;
@@ -194,7 +195,7 @@ int main(int argc, char *argv[]) {
 
                 //put data
                 for(int k = HEADER_SIZE; k < pktlen; k++) {
-                pkt[k] = pFileContent[(j * DATA_SIZE) + (k - HEADER_SIZE)];
+                    pkt[k] = pFileContent[(j * DATA_SIZE) + (k - HEADER_SIZE)];
                 }
 
                 
@@ -240,25 +241,37 @@ int main(int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                 }
 
+                // timeout
+                else if (n == 0) {
+                    if (errno == EWOULDBLOCK) {
+                        printf("Timeout: No ACK/NAK received");
+                        break;
+                    }
+                }
+
                 // print obtained data
                 cout << "Message from client" << endl;
                 receiveBuffer[n] = '\0';
                 printf("Client : %s\n", receiveBuffer);
+                
+                // get message in string form
+                vector<char> buffer(MAXLINE);
+                string rcv;
 
-                for int (j = 0; j < n; j+2) {
-                    if (receiveBuffer[j] == "ACK") {
-                        int seqNum = receiveBuffer[j+1];
+                rcv.append(buffer.cbegin(), buffer.cend() );
+
+                for (int k = 0; k < n; k+=4) {
+                    string msg = rcv.substr(k, 3);
+                    int seqNum = (int)rcv.at(k+3);
+                    if (msg == "ACK") {
                         // advance window
                         if (seqNum > lastAck) {
                             lastAck = seqNum;
                         }
                     }
 
-                    else if (receiveBuffer[j+1] == "NAK") {
-                        int seqNum = receiveBuffer[j+1];
+                    else if (msg == "NAK") {
                         lastAck = seqNum;
-
-                        // stop timer
                         break;
                     }
 
@@ -266,6 +279,7 @@ int main(int argc, char *argv[]) {
                         perror("ACK/NACK receiving error");
                         exit(EXIT_FAILURE);
                     }
+                    
                 }
 
                 bzero(&receiveBuffer, BUFFSIZE);
