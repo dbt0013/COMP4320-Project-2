@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
         }
 
         // print obtained data
-        cout << "Request from clinet" << endl;
+        cout << "Request from client" << endl;
         receiveBuffer[n] = '\0';
         printf("Client : %s\n", receiveBuffer);
 

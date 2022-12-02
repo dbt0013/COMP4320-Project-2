@@ -203,12 +203,25 @@ int main(int argc, char *argv[]) {
             int seq = ((pkt[6] - '0') * 1000 + (pkt[7] - '0') * 100 + (pkt[8] - '0') * 10 + (pkt[9] - '0'));
             cout << "Received packet [" << seq << "] size: " << pktLength << " bytes from server | ";
 
+            // Prepare client response for packet
+            bzero(&sendBuffer, BUFFSIZE);
+            string response = "";
+            
             // Print packet and check result
             if (checkPkt(pkt, pktLength)) {
                 cout << "pass" << endl;
+                response += "ACK" + to_string(seq);
             }
             else {
                 cout << "error" << endl;
+                response += "NAK" + to_string(seq);
+            }
+
+            strcpy(sendBuffer, response.c_str());
+            int sendNum = sendto(sockfd, sendBuffer, strlen(sendBuffer), 0, (struct sockaddr *)&servaddr, serverLength);
+            if (sendNum < 0) {
+                perror("error: sendto");
+                exit(EXIT_FAILURE);
             }
 
             reassemblePkt(pkt, pFileContent, pktLength);
