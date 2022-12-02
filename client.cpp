@@ -29,7 +29,7 @@ using namespace std;
 #define DATA_SIZE 502
 
 
-// Creates packet errors
+// Creates packet errors and loss
 void gremlin(char pkt[], int pktLength, float probability) {
     if (1.0 * rand() / RAND_MAX > probability) {
         return;
@@ -50,6 +50,26 @@ void gremlin(char pkt[], int pktLength, float probability) {
     }
 }
 
+// Creates packet delays
+void delayGremlin(char pkt[], int pktLength, float probability, double delayTime) {
+    if (1.0 * rand() / RAND_MAX > probability) {
+        return;
+    }
+    
+    if (1.0 * rand() / RAND_MAX >= 0 && 1.0 * rand() / RAND_MAX < 0.5) {
+        sleep(delayTime / 1000);
+    }
+    else if (1.0 * rand() / RAND_MAX >= 0.5 && 1.0 * rand() / RAND_MAX < 0.8) {
+        for (int i = 0; i < 2; i++) {
+            sleep(delayTime / 1000);
+        }
+    } 
+    else {
+        for (int i = 0; i < 3; i++){
+            sleep(delayTime / 1000);
+        }
+    }
+}
 
 // Checks the sum of data in the packet, excluding header [0-5]
 int checksum(char pkt[], int pktLength) {
@@ -86,6 +106,8 @@ int main(int argc, char *argv[]) {
         char sendBuffer[BUFFSIZE];
         char receiveBuffer[BUFFSIZE];
         float errorProbability;
+        float delayProbability;
+        double delayTime;
         int fileLength;
 
         // Check input IP
@@ -127,6 +149,24 @@ int main(int argc, char *argv[]) {
                 break;
             }
             cout << "Invalid probability, please input a numerical value between 0 and 1" << endl;
+        }
+
+        // Get packet delay probability and time
+        while (true) {
+            cout << "Enter packet delay probability [0, 1]: ";
+            cin >> delayProbability;
+            if (delayProbability >= 0 && delayProbability <= 1) {
+                break;
+            }
+            cout << "Invalid probability, please input a numerical value between 0 and 1" << endl;
+        }
+        while (true) {
+            cout << "Enter packet delay time [milliseconds]: ";
+            cin >> delayTime;
+            if (delayTime > 0) {
+                break;
+            }
+            cout << "Invalid probability, please input a numerical value greater than zero" << endl;
         }
 
         // Send filename to server
@@ -199,6 +239,7 @@ int main(int argc, char *argv[]) {
 
             // Generate packet errors if error probability > 0
             gremlin(pkt, sizeof(pkt), errorProbability);
+            delayGremlin(pkt, sizeof(pkt), delayProbability, delayTime);
             
             int seq = ((pkt[6] - '0') * 1000 + (pkt[7] - '0') * 100 + (pkt[8] - '0') * 10 + (pkt[9] - '0'));
             cout << "Received packet [" << seq << "] size: " << pktLength << " bytes from server | ";
