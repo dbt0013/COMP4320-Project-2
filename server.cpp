@@ -278,6 +278,7 @@ int main(int argc, char *argv[]) {
 
                 else if (msg == "NAK") {
                     lastAck = seqNum;
+                    bzero(&receiveBuffer, BUFFSIZE);
                     break;
                 }
 
