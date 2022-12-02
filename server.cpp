@@ -235,39 +235,42 @@ int main(int argc, char *argv[]) {
 
             }
 
-            // Wait additional 15ms after last packet in window sent
-            sleep(0.015);
+            for (int k = 0; k < WINDOW_SIZE; k++) {
+                // Wait additional 15ms after last packet in window sent
+                sleep(0.015);
 
-            // check for ACK/NAK
-            int n = recvfrom(sockfd, (char *)receiveBuffer, MAXLINE,
-                MSG_WAITALL, ( struct sockaddr *) &clientaddr, (socklen_t *)&clientLength);
+                // check for ACK/NAK
+                int n = recvfrom(sockfd, (char *)receiveBuffer, MAXLINE,
+                    MSG_WAITALL, ( struct sockaddr *) &clientaddr, (socklen_t *)&clientLength);
 
-            if (n < 0) {
-                perror("error receiving from client");
-                exit(EXIT_FAILURE);
-            }
-
-            // timeout
-            else if (n == 0) {
-                if (errno == EWOULDBLOCK) {
-                    printf("Timeout: No ACK/NAK received");
-                    break;
+                if (n < 0) {
+                    perror("error receiving from client");
+                    exit(EXIT_FAILURE);
                 }
-            }
 
-            // print obtained data
-            cout << "Message from client" << endl;
-            receiveBuffer[n] = '\0';
-            printf("Client : %s\n", receiveBuffer);
+                // timeout
+                else if (n == 0) {
+                    if (errno == EWOULDBLOCK) {
+                        printf("Timeout: No ACK/NAK received");
+                        break;
+                    }
+                }
+
+                // print obtained data
+                cout << "Message from client" << endl;
+                receiveBuffer[n] = '\0';
+                printf("Client : %s\n", receiveBuffer);
                 
-            // get message in string form
-            string rcv(receiveBuffer, n);
+                // get message in string form
+                string rcv(receiveBuffer, n);
 
-            for (int k = 0; k < n; k+=4) {
-                string msg = rcv.substr(k, 3);
-                int seqNum = (int)rcv.at(k+3);
+                string msg = rcv.substr(0,3);
+
+                int numDigits = n - 3;
+                string seqNumStr = rcv.substr(3, numDigits);
+                int seqNum = stoi(seqNumStr);
+
                 if (msg == "ACK") {
-                    // advance window
                     if (seqNum > lastAck) {
                         lastAck = seqNum;
                     }
@@ -282,10 +285,11 @@ int main(int argc, char *argv[]) {
                     perror("ACK/NACK receiving error");
                     exit(EXIT_FAILURE);
                 }
-                    
-            }
 
-            bzero(&receiveBuffer, BUFFSIZE);
+                bzero(&receiveBuffer, BUFFSIZE);
+
+
+            }
         }
         cout << endl;
         free(pFileContent);
