@@ -261,10 +261,7 @@ int main(int argc, char *argv[]) {
             printf("Client : %s\n", receiveBuffer);
                 
             // get message in string form
-            vector<char> buffer(MAXLINE);
-            string rcv;
-
-            rcv.append(buffer.cbegin(), buffer.cend() );
+            string rcv(receiveBuffer, n);
 
             for (int k = 0; k < n; k+=4) {
                 string msg = rcv.substr(k, 3);
