@@ -155,19 +155,22 @@ int main(int argc, char *argv[]) {
         while (true) {
             cout << "Enter packet delay probability [0, 1]: ";
             cin >> delayProbability;
-            if (delayProbability >= 0 && delayProbability <= 1) {
+            if (delayProbability > 0 && delayProbability <= 1) {
+                while (true) {
+                    cout << "Enter packet delay time [milliseconds]: ";
+                    cin >> delayTime;
+                    if (delayTime > 0) {
+                        break;
+                    }
+                    cout << "Invalid probability, please input a numerical value greater than zero" << endl;
+                }
+                break;
+            } else if (delayProbability == 0){
                 break;
             }
             cout << "Invalid probability, please input a numerical value between 0 and 1" << endl;
         }
-        while (true) {
-            cout << "Enter packet delay time [milliseconds]: ";
-            cin >> delayTime;
-            if (delayTime > 0) {
-                break;
-            }
-            cout << "Invalid probability, please input a numerical value greater than zero" << endl;
-        }
+        
 
         // Send filename to server
         bzero(&sendBuffer, BUFFSIZE);
@@ -236,13 +239,13 @@ int main(int argc, char *argv[]) {
             for (int i = 0; i < pktLength; i++) {
                 pkt[i] = receiveBuffer[i];
             }
-
-            // Generate packet errors if error probability > 0
-            gremlin(pkt, sizeof(pkt), errorProbability);
-            delayGremlin(pkt, sizeof(pkt), delayProbability, delayTime);
             
             int seq = ((pkt[6] - '0') * 1000 + (pkt[7] - '0') * 100 + (pkt[8] - '0') * 10 + (pkt[9] - '0'));
             cout << "Received packet [" << seq << "] size: " << pktLength << " bytes from server | ";
+            
+            // Generate packet errors if error probability > 0
+            gremlin(pkt, sizeof(pkt), errorProbability);
+            delayGremlin(pkt, sizeof(pkt), delayProbability, delayTime);
 
             // Prepare client response for packet
             bzero(&sendBuffer, BUFFSIZE);
@@ -265,7 +268,7 @@ int main(int argc, char *argv[]) {
                 perror("error: sendto");
                 exit(EXIT_FAILURE);
             }
-
+            cout << "Sent " << response << " to server \n";
         }
 
         // Write to file

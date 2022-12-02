@@ -156,8 +156,7 @@ int main(int argc, char *argv[]) {
         cout << "sending..." << endl;
 
         int lastAck = 0;
-        while (lastAck != (fileLength + (DATA_SIZE - 1)) / DATA_SIZE) {
-
+        while (lastAck <= (fileLength + (DATA_SIZE)) - 2 / DATA_SIZE && lastAck >= 0) {
             // initialize current window
             int window_start = lastAck;
             int window_end = window_start + WINDOW_SIZE;
@@ -168,6 +167,7 @@ int main(int argc, char *argv[]) {
             }
 
             // send window
+            bool flag = false;
             for (int j = window_start; j < window_end; j++) {
                 // zero out buffer
                 bzero(&sendBuffer, BUFFSIZE);
@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
 
                 //determine whether it is the last packet
                 int pktlen = PACKET_SIZE;
-                if (j == fileLength / DATA_SIZE) {
+                if (j > fileLength / DATA_SIZE - 2) {
                     pktlen = fileLength % DATA_SIZE + HEADER_SIZE;
                     lastPacket = true;
                 }
@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 //send NULL after sending all packet
-                if(lastPacket) {
+                if (lastPacket) {
                     cout << "Full file sent to client" << endl;
                     bzero(&sendBuffer, BUFFSIZE);
                     n = sendto(sockfd, (char *)sendBuffer, 0, 0, (struct sockaddr *)&clientaddr, clientLength);
@@ -230,9 +230,13 @@ int main(int argc, char *argv[]) {
                         perror("error: Sending last packet");
                         exit(1);
                     }
+                    flag = true;
                     break;
                 }
 
+            }
+            if (flag) {
+                break;
             }
 
             for (int k = 0; k < WINDOW_SIZE; k++) {
