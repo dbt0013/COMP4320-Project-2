@@ -211,6 +211,7 @@ int main(int argc, char *argv[]) {
             if (checkPkt(pkt, pktLength)) {
                 cout << "pass" << endl;
                 response += "ACK" + to_string(seq);
+                reassemblePkt(pkt, pFileContent, pktLength);
             }
             else {
                 cout << "error" << endl;
@@ -224,7 +225,6 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
             }
 
-            reassemblePkt(pkt, pFileContent, pktLength);
         }
 
         // Write to file
